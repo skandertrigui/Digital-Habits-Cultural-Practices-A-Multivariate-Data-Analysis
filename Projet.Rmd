@@ -1,0 +1,432 @@
+---
+title: "PROJET D’ANALYSE DE DONNÉES"
+author: " Trigui Skander"
+output:
+  pdf_document: default
+  word_document: default
+---
+
+## Problématique
+Les usages du numérique et les pratiques culturelles varient fortement d’un individu à l’autre.
+L’objectif de ce projet est d’identifier les principaux facteurs qui structurent ces comportements et de mettre en évidence des profils homogènes au sein de la population étudiée.
+
+## Introduction 
+À partir des données recueillies, des méthodes statistiques multivariées sont mobilisées afin d’identifier les dimensions structurantes et de dégager des profils homogènes. Deux ACP sont réalisées afin d’explorer les données, mais seule la plus pertinente est retenue et présentée dans l’analyse finale, complétée par une analyse des correspondances multiples (ACM) pour l’étude des variables qualitatives et par une classification automatique, afin d’obtenir une lecture synthétique et objective des comportements observés.
+
+
+Pour débuter l’analyse, nous importons les données téléchargées au format Excel depuis Google Forms:
+```{r}
+library(readxl)
+
+data <- read_excel("C:/Users/skand/OneDrive/Bureau/dauphine/projet_belmufti/Form_realiste_bruit.xlsx")
+
+```
+
+Après le chargement des données, la base est nettoyée par la suppression de la colonne d’horodatage. Les réponses qualitatives de type Likert sont ensuite normalisées par conversion en valeurs numériques à l’aide de mappings adaptés, puis sauvegardées dans un nouveau fichier pour l’analyse sous R.
+
+```{r}
+# Suppression de la colonne d'horodatage
+data <- data[ , -1]
+
+```
+
+```{r}
+likert_map <- c(
+  "Pas du tout d'accord" = 1,
+  "Plutôt pas d'accord" = 2,
+  "Neutre" = 3,
+  "Plutôt d'accord" = 4,
+  "Tout à fait d'accord" = 5
+)
+
+#Toutes les colonnes entre crochets [...] dans le fichier
+likert_cols <- grep("\\[", names(data))
+
+data[ , likert_cols] <- lapply(data[ , likert_cols], function(col) {
+  unname(likert_map[col])
+})
+#Afin d’améliorer la clarté, les colonnes ont été renommées.
+nouveaux_noms <- c(
+  "Age", "Sexe", "CSP", "Region",
+  "RS_quotidien", "Protection_donnees", "Internet_utilite", "Mefiance_arnaques",
+  "Messages_vs_appels", "Tech_generations", "Achats_en_ligne", "Ecrans_nuisent",
+  "RS_vie_privee", "Temps_ecran", "Confiance_paiement", "Actu_en_ligne",
+  "IA_fiable", "Tech_avantages", "Dependance_numerique",
+  "Cinema", "Lecture_vs_films", "Culture_essentielle", "Lecture_frequente",
+  "Musique_quotidienne", "Culture_accessible", "Streaming", "Culture_chere",
+  "Musees", "Culture_generations", "Nouveaux_styles", "Culture_locale",
+  "Culture_vs_sport", "Culture_temps", "Film_seul",
+  "Instagram", "TikTok", "Abonnement_streaming", "Voyage_etranger",
+  "Salle_sport", "Ebook", "Benevolat", "Actu_quotidienne", "Sommeil_7h"
+)
+
+colnames(data) <- nouveaux_noms
+write.csv(data, "Form_normalise.csv", row.names = FALSE)
+
+
+```
+
+
+Apres avoir récuperer la nouvelle dataset ,nous devons la charger :
+```{r}
+data1 <- read.csv("C:/Users/skand/OneDrive/Bureau/dauphine/projet_belmufti/Form_normalise.csv")
+
+```
+
+
+## Statistiques descriptives
+Avant les analyses multivariées, une exploration descriptive des données est réalisée afin de caractériser l’échantillon, vérifier la cohérence des variables et dégager les principales tendances observées.
+
+La variable sexe est retenue car elle permet d’analyser d’éventuelles différences de comportements numériques et culturels selon le genre.
+```{r}
+library(ggplot2)
+library(dplyr)
+
+# Calcul des pourcentages
+data_plot <- data1 %>%
+  count(Sexe) %>%
+  mutate(
+    pourcentage = n / sum(n) * 100,
+    label = paste0(round(pourcentage, 1), "%")
+  )
+
+# Pie chart avec pourcentages
+ggplot(data_plot, aes(x = "", y = n, fill = Sexe)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar("y", start = 0) +
+  geom_text(
+    aes(label = label),
+    position = position_stack(vjust = 0.5),
+    color = "white",
+    size = 5
+  ) +
+  labs(title = "Répartition par sexe") +
+  theme_void() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+
+
+```
+La région est conservée afin d’évaluer l’influence du contexte géographique sur les usages du numérique et les pratiques culturelles.
+
+```{r}
+library(ggplot2)
+library(dplyr)
+
+# Calcul des pourcentages par région
+data_plot_region <- data1 %>%
+  count(Region) %>%
+  mutate(
+    pourcentage = n / sum(n) * 100,
+    label = paste0(round(pourcentage, 1), "%")
+  )
+
+# Pie chart avec pourcentages
+ggplot(data_plot_region, aes(x = "", y = n, fill = Region)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar("y", start = 0) +
+  geom_text(
+    aes(label = label),
+    position = position_stack(vjust = 0.5),
+    color = "white",
+    size = 4
+  ) +
+  labs(title = "Répartition par région") +
+  theme_void() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+
+
+```
+La catégorie socioprofessionnelle constitue une variable structurante, susceptible d’expliquer des différences d’accès, de perception et d’usage des technologies.
+
+```{r}
+library(ggplot2)
+library(dplyr)
+
+# Calcul des pourcentages par catégorie socioprofessionnelle
+data_plot_csp <- data1 %>%
+  count(`CSP`) %>%
+  mutate(
+    pourcentage = n / sum(n) * 100,
+    label = paste0(round(pourcentage, 1), "%")
+  )
+
+# Pie chart avec pourcentages
+ggplot(data_plot_csp, 
+       aes(x = "", y = n, fill = `CSP`)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar("y", start = 0) +
+  geom_text(
+    aes(label = label),
+    position = position_stack(vjust = 0.5),
+    color = "white",
+    size = 4
+  ) +
+  labs(title = "Catégorie socioprofessionnelle") +
+  theme_void() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+
+```
+L’âge, regroupé en tranches, est une variable centrale permettant d’analyser les effets générationnels sur les comportements numériques et culturels.
+
+```{r}
+# Chargement des librairies
+library(ggplot2)
+library(dplyr)
+
+
+#  Création des classes d'âge
+data1$Age_classe <- cut(
+  data1$Age,
+  breaks = c(0, 25, 40, 60, 100),
+  labels = c("Jeunes", "Adultes", "Matures", "Seniors"),
+  right = TRUE,
+  include.lowest = TRUE
+)
+
+#  Calcul des effectifs et pourcentages
+data_plot_age <- data1 %>%
+  count(Age_classe) %>%
+  mutate(
+    pourcentage = n / sum(n) * 100,
+    label = paste0(round(pourcentage, 1), "%")
+  )
+
+# Pie chart avec pourcentages
+ggplot(data_plot_age, aes(x = "", y = n, fill = Age_classe)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar("y", start = 0) +
+  geom_text(
+    aes(label = label),
+    position = position_stack(vjust = 0.5),
+    color = "white",
+    size = 4
+  ) +
+  labs(title = "Répartition par tranches d'âge") +
+  theme_void() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+
+
+```
+ACP 
+```{r}
+library(corrplot)
+
+# Sélection du Bloc 1 : Numérique (colonnes 5 à 19)
+bloc1_numerique <- data[, 5:19]
+nrow(bloc1_numerique)     # n
+ncol(bloc1_numerique) # Calcul de la matrice de corrélation
+matrice_correlation_bloc1 <- cor(bloc1_numerique, use = "complete.obs")
+
+# Visualisation
+corrplot(
+  matrice_correlation_bloc1,
+  method = "circle",
+  type = "upper",
+  tl.col = "black",
+  tl.srt = 45
+)
+
+```
+On observe que « RS_quotidien » est fortement corrélée à « Temps_écran » (≈ 0,6) et « Dépendance_numérique » (≈ 0,55), traduisant une association entre usage et durée d’exposition.
+
+On constate également que « Internet_utilité », « Tech_avantages » et « IA_fiable » présentent des corrélations positives modérées (≈ 0,45–0,6), indiquant une cohérence entre utilité perçue et confiance technologique.
+
+Enfin, « Écrans_nuisent » est négativement corrélée à « Tech_avantages » et « Dépendance_numérique » (≈ −0,4), soulignant une opposition entre perception critique et appréciation du numérique.
+
+Maintenant effectuons l’ACP :
+```{r}
+acp_result <- PCA(
+  bloc1_numerique,
+  scale.unit = TRUE,
+  ncp = 15,
+  graph = FALSE
+)
+
+fviz_eig(
+  acp_result,
+  addlabels = TRUE,
+  ylim = c(0, 40),
+  ncp = 15
+)
+
+
+
+```
+#Choix du nombre d'axes
+Nous retenons 2 axes selon le critère de Kaiser. Le coude apparaît après le deuxième axe et l’inertie cumulée atteint environ 50 %, ce qui est satisfaisant au regard des 15 variables analysées.
+#Interpretation
+```{r}
+acp_result$var$coord[, 1:2]
+
+```
+Axe 1 – Usage et intégration du numérique
+La première dimension est fortement portée par RS_quotidien, Internet_utilité, Méfiance_arnaques, Écrans_nuisent, Temps_écran, Tech_avantages et Protection_donnees.
+Elle traduit un usage fréquent et central du numérique, associé à une perception de son utilité et de ses effets dans la vie quotidienne.
+
+Axe 2 – Confiance et rapport critique au numérique
+La seconde dimension est principalement liée à Tech_generations, IA_fiable et Confiance_paiement (corrélations positives), et s’oppose à Actu_en_ligne et Dépendance_numérique (corrélations négatives).
+Elle reflète un rapport plus critique ou confiant vis-à-vis des technologies, notamment en termes de fiabilité, de sécurité et d’impact perçu.
+#Carte des variables 
+```{r}
+fviz_pca_var(
+  acp_result,
+  col.var = "contrib",
+  gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+  repel = TRUE
+)
+
+```
+la première dimension regroupe principalement des variables liées à l’intensité et à la fréquence d’usage du numérique (« RS_quotidien », « Temps_écran », « Internet_utilité », « Tech_avantages »), tandis que la seconde dimension est davantage structurée par les perceptions et la confiance envers les technologies (« IA_fiable », « Confiance_paiement », « Tech_generations »), en opposition partielle à la « Dépendance_numérique ». Le chevauchement observé entre usage, confiance et perception des risques est réaliste et reflète des comportements numériques complexes
+#Carte des individus
+```{r}
+fviz_pca_ind(
+  acp_result,
+  geom = "point",
+  pointsize = 2,
+  alpha.ind = 0.6,
+  col.ind = "cos2",   # qualité de représentation
+  gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+  repel = TRUE
+)
+
+```
+
+La dispersion des individus selon l’axe 1 traduit un gradient d’intensité d’usage et d’adhésion au numérique : à droite se situent les individus fortement utilisateurs, confiants et dépendants aux outils numériques, tandis qu’à gauche apparaissent des profils plus distants ou critiques.
+L’axe 2 distingue principalement les perceptions et attitudes vis-à-vis du numérique, opposant des individus confiants et optimistes à ceux exprimant davantage de méfiance ou de réserves. La répartition continue des points montre une diversité de comportements plutôt que des groupes strictement séparés
+#ACM
+Commençons par extraire uniquement les colonnes dont nous avons besoin et les renommer :
+```{r}
+# Sélection des variables qualitatives pour l’ACM (Horodateur supprimé)
+data_acm <- data[, c(1:4, 34:42)]
+
+# Renommage clair
+colnames(data_acm) <- c(
+  "Age",
+  "Sexe",
+  "CSP",
+  "Region",
+  "Instagram",
+  "TikTok",
+  "Abonnement_streaming",
+  "Voyage_etranger",
+  "Salle_sport",
+  "Livre_numerique",
+  "Benevolat",
+  "Actu_quotidienne",
+  "Sommeil_7h"
+)
+
+# Conversion en facteurs (obligatoire pour l’ACM)
+data_acm[] <- lapply(data_acm, as.factor)
+
+```
+
+Réalisons une ACM sur les preferences des individus :
+
+```{r}
+library(FactoMineR)
+library(factoextra)
+
+# Lancement de l’ACM
+res.MCA <- MCA(data_acm, graph = FALSE)
+
+# Graphe des valeurs propres
+fviz_eig(
+  res.MCA,
+  addlabels = TRUE,
+  ylim = c(0, 40)
+)
+
+```
+
+Au regard de la décroissance progressive des valeurs propres et de l’absence de coude marqué, il est pertinent de retenir 2 axes pour l’interprétation de l’ACM.
+
+#Graphe des variables quali
+```{r}
+plot.MCA(
+  res.MCA,
+  choix = "var",
+  title = "Graphe des variables (ACM)"
+)
+
+
+```
+Nous pouvons voir que la première dimension est principalement influencée par les pratiques et équipements numériques, tels que l’abonnement à une plateforme de streaming, l’usage d’Instagram ou de TikTok, ainsi que les habitudes de voyage et d’activité sportive.
+La seconde dimension est davantage influencée par les caractéristiques sociodémographiques, en particulier l’âge et, dans une moindre mesure, la catégorie socioprofessionnelle et la région.
+```{r}
+plot.MCA(res.MCA,
+         invisible = "var",
+         habillage = "cos2",
+         title = "Graphe de l'ACM",
+         label = c("ind"))
+
+```
+Nous pouvons remarquer que la majorité des individus se situe près du centre du plan factoriel, avec des valeurs de cos² faibles, indiquant une représentation limitée sur les deux premières dimensions. À l’inverse, les individus les plus éloignés du centre présentent des cos² plus élevés et sont donc mieux représentés, traduisant des profils plus marqués.
+```{r}
+plot.MCA(
+  res.MCA,
+  invisible = "ind",
+  select = "contrib",
+  cex = 0.8,
+  title = "Graphe des modalités les plus contributives (ACM)"
+)
+
+```
+Le graphe des modalités les plus contributives met en évidence une structuration claire des profils. La première dimension oppose principalement des modalités associées à des pratiques et engagements actifs (abonnement au streaming, bénévolat, usage des réseaux sociaux) à leurs modalités opposées. La seconde dimension est davantage liée aux caractéristiques sociodémographiques, notamment le statut (étudiant, professionnel, retraité) et l’âge, qui contribuent fortement à la différenciation des profils.
+
+#Classification automatique 
+Une classification ascendante hiérarchique a été réalisée à partir des coordonnées des individus sur les axes factoriels retenus, permettant d’identifier des groupes d’individus aux profils similaires.
+
+récupérer les coordonnées des individus
+```{r}
+coord_ind <- acp_result$ind$coord[, 1:2]  # axes retenus
+
+```
+CAH (méthode de Ward)
+```{r}
+dist_ind <- dist(coord_ind)
+cah <- hclust(dist_ind, method = "ward.D2")
+
+```
+dendrogramme
+```{r}
+plot(cah, labels = FALSE, hang = -1,
+     main = "Dendrogramme de la classification")
+
+```
+
+choix du nombre de classes 
+```{r}
+clusters <- cutree(cah, k = 4) #Le dendrogramme met en évidence une rupture marquée de la distance inter-classes autour d’une hauteur de 15, conduisant au choix de 4 classes
+
+```
+Visualisation des clusters sur le plan factoriel
+
+```{r}
+data$cluster <- as.factor(clusters)
+
+fviz_cluster(
+  list(data = coord_ind, cluster = clusters),
+  geom = "point",
+  ellipse.type = "norm",
+  main = "Clusters d’individus sur le plan factoriel"
+)
+
+```
+#Interpretation 
+La projection des clusters sur le plan factoriel met en évidence quatre groupes d’individus distincts, principalement différenciés selon la première dimension. Le cluster 1, situé à droite du plan, regroupe des individus caractérisés par une forte intensité d’usage et une adhésion marquée au numérique. Le cluster 3, à gauche et en haut, correspond à des profils plus modérés ou sélectifs, tandis que le cluster 4, en bas à gauche, rassemble des individus exprimant une relation plus distante ou critique. Le cluster 2, positionné au centre, présente des profils intermédiaires, traduisant une zone de transition entre les différents comportements observés.
+
+Cluster 1 – Utilisateurs intensifs et confiants du numérique
+Regroupe des individus fortement engagés dans l’usage du numérique, avec une perception globalement positive et confiante des technologies.
+
+Cluster 2 – Profils intermédiaires et polyvalents
+Correspond à des individus aux pratiques numériques modérées, combinant usage régulier et attitudes nuancées.
+
+Cluster 3 – Utilisateurs sélectifs et pragmatiques
+Rassemble des individus qui utilisent le numérique de manière ciblée, sans adhésion excessive ni rejet marqué.
+
+Cluster 4 – Profils distants ou critiques du numérique
+Regroupe des individus exprimant un usage plus limité et une attitude plus réservée ou critique vis-à-vis des technologies.
+
+#Synthèse finale
+L’analyse combinée des ACP, de l’ACM et de la classification automatique a permis d’identifier des profils distincts d’individus selon leurs usages, perceptions et pratiques. Les résultats mettent en évidence une diversité de comportements numériques et culturels, allant de profils fortement engagés à des profils plus distants, confirmant la pertinence de l’approche multivariée retenue.
